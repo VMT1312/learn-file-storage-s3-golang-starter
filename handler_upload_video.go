@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -130,11 +131,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s3URL := "https://" + cfg.s3Bucket + ".s3." + cfg.s3Region + ".amazonaws.com/" + filename
-	dbVid.VideoURL = &s3URL
+	url := fmt.Sprintf("%s,%s", cfg.s3Bucket, filename)
+	dbVid.VideoURL = &url
 	err = cfg.db.UpdateVideo(dbVid)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to update video in database", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
+
+	presignedVideo, err := cfg.dbVideoToSignedVideo(dbVid)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate presigned URL", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, presignedVideo)
 }
